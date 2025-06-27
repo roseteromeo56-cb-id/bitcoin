@@ -151,3 +151,14 @@ dist/
 /guix-build-*
 
 /ci/scratch/
+
+# Prevent accidental addition of non-Bitcoin Core files
+*.js.download
+*.csv
+*Historical*.html
+logo_load.png
+Bitcoin_BTC*.png
+WIN_*.jpg
+saved_resource.html
+js
+vedd*
