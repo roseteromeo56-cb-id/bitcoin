@@ -78,6 +78,7 @@
 #include <exception>
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #if defined(Q_OS_MACOS)
@@ -622,12 +623,11 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         fs::remove(GetAutostartFilePath());
     else
     {
-        char pszExePath[MAX_PATH+1];
-        ssize_t r = readlink("/proc/self/exe", pszExePath, sizeof(pszExePath));
-        if (r == -1 || r > MAX_PATH) {
+        std::error_code error;
+        const fs::path exe_path{fs::read_symlink("/proc/self/exe", error)};
+        if (error || exe_path.empty()) {
             return false;
         }
-        pszExePath[r] = '\0';
 
         fs::create_directories(GetAutostartDir());
 
@@ -642,7 +642,7 @@ bool SetStartOnSystemStartup(bool fAutoStart)
             optionFile << "Name=Bitcoin\n";
         else
             optionFile << strprintf("Name=Bitcoin (%s)\n", ChainTypeToString(chain));
-        optionFile << "Exec=" << pszExePath << strprintf(" -min -chain=%s\n", ChainTypeToString(chain));
+        optionFile << "Exec=" << fs::PathToString(exe_path) << strprintf(" -min -chain=%s\n", ChainTypeToString(chain));
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";
         optionFile.close();
