@@ -18,7 +18,43 @@
 
 #include <univalue.h>
 
+#if defined(Q_OS_LINUX)
+#include <cstdlib>
+#include <optional>
+#endif
 #include <fstream>
+#include <string>
+#include <system_error>
+
+#if defined(Q_OS_LINUX)
+namespace {
+class ScopedEnvironmentVariable
+{
+public:
+    explicit ScopedEnvironmentVariable(const char* name) : m_name{name}
+    {
+        if (const char* value = std::getenv(m_name)) {
+            m_previous_value = value;
+        }
+    }
+
+    ~ScopedEnvironmentVariable()
+    {
+        if (m_previous_value) {
+            setenv(m_name, m_previous_value->c_str(), 1);
+        } else {
+            unsetenv(m_name);
+        }
+    }
+
+    void Set(const std::string& value) const { setenv(m_name, value.c_str(), 1); }
+
+private:
+    const char* const m_name;
+    std::optional<std::string> m_previous_value;
+};
+} // namespace
+#endif
 
 OptionTests::OptionTests(interfaces::Node& node) : m_node(node)
 {
@@ -150,4 +186,35 @@ void OptionTests::extractFilter()
 
     filter = QString("Image (*.png *.jpg)");
     QCOMPARE(GUIUtil::ExtractFirstSuffixFromFilter(filter), "png");
+}
+
+void OptionTests::linuxAutostartDesktopEntry()
+{
+#if !defined(Q_OS_LINUX)
+    QSKIP("Linux-only autostart implementation");
+#else
+    const ScopedEnvironmentVariable xdg_config_home{"XDG_CONFIG_HOME"};
+    const fs::path config_home{gArgs.GetDataDirBase() / "xdg_config_home"};
+    fs::remove_all(config_home);
+    fs::create_directories(config_home);
+    xdg_config_home.Set(fs::PathToString(config_home));
+
+    std::error_code error;
+    const fs::path exe_path{fs::read_symlink("/proc/self/exe", error)};
+    QVERIFY(!error);
+    QVERIFY(!exe_path.empty());
+
+    QVERIFY(GUIUtil::SetStartOnSystemStartup(true));
+
+    const fs::path autostart_file{config_home / "autostart" / "bitcoin-regtest.desktop"};
+    std::ifstream file{autostart_file};
+    QVERIFY(file.good());
+    const std::string contents{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+
+    QVERIFY(contents.find(std::string{"Exec="} + fs::PathToString(exe_path) + " -min -chain=regtest\n") != std::string::npos);
+    QVERIFY(contents.find('\0') == std::string::npos);
+
+    QVERIFY(GUIUtil::SetStartOnSystemStartup(false));
+    QVERIFY(!fs::exists(autostart_file));
+#endif
 }
