@@ -20,8 +20,10 @@ if [ -n "$DPKG_ADD_ARCH" ]; then
 fi
 
 if [[ $CI_IMAGE_NAME_TAG == *centos* ]]; then
+  read -r -a ci_base_packages <<< "$CI_BASE_PACKAGES"
+  read -r -a packages <<< "$PACKAGES"
   bash -c "dnf -y install epel-release"
-  bash -c "dnf -y --allowerasing install $CI_BASE_PACKAGES $PACKAGES"
+  dnf -y --allowerasing install "${ci_base_packages[@]}" "${packages[@]}"
 elif [ "$CI_OS_NAME" != "macos" ]; then
   if [[ -n "${APPEND_APT_SOURCES_LIST}" ]]; then
     echo "${APPEND_APT_SOURCES_LIST}" >> /etc/apt/sources.list
